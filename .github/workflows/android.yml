@@ -1,0 +1,210 @@
+name: Construir Jarvis Optimizer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [principal, main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar projeto
+        uses: actions/checkout@v4
+
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Preparar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Preparar Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Criar projeto Android
+        run: |
+          mkdir -p app/src/main/java/com/jarvis/optimizer
+          mkdir -p app/src/main/res/values
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "JarvisOptimizer"
+          include(":app")
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.jarvis.optimizer'
+              compileSdk 35
+
+              defaultConfig {
+                  applicationId 'com.jarvis.optimizer'
+                  minSdk 26
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@android:style/Theme.Material.NoActionBar"
+                  android:label="Jarvis Optimizer"
+                  android:usesCleartextTraffic="false">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/jarvis/optimizer/MainActivity.java <<'EOF'
+          package com.jarvis.optimizer;
+
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.app.ActivityManager;
+          import android.content.Context;
+          import android.graphics.Color;
+          import android.view.Gravity;
+          import android.widget.LinearLayout;
+          import android.widget.TextView;
+          import android.widget.Button;
+          import android.widget.ScrollView;
+          import android.os.BatteryManager;
+          import android.os.StatFs;
+          import android.os.Environment;
+          import java.util.Locale;
+
+          public class MainActivity extends Activity {
+              LinearLayout layout;
+              int blue = Color.rgb(0, 170, 255);
+
+              TextView text(String value, int size) {
+                  TextView t = new TextView(this);
+                  t.setText(value);
+                  t.setTextColor(Color.WHITE);
+                  t.setTextSize(size);
+                  t.setGravity(Gravity.CENTER);
+                  t.setPadding(12, 18, 12, 18);
+                  return t;
+              }
+
+              void button(String label, Runnable action) {
+                  Button b = new Button(this);
+                  b.setText(label);
+                  b.setTextColor(Color.WHITE);
+                  b.setBackgroundTintList(
+                      android.content.res.ColorStateList.valueOf(
+                          Color.rgb(0, 90, 160)));
+                  b.setOnClickListener(v -> action.run());
+                  layout.addView(b);
+              }
+
+              String diagnostics() {
+                  ActivityManager.MemoryInfo mem =
+                      new ActivityManager.MemoryInfo();
+                  ActivityManager am =
+                      (ActivityManager)getSystemService(ACTIVITY_SERVICE);
+                  am.getMemoryInfo(mem);
+
+                  long total = mem.totalMem / 1048576;
+                  long free = mem.availMem / 1048576;
+
+                  BatteryManager battery =
+                      (BatteryManager)getSystemService(BATTERY_SERVICE);
+                  int level = battery.getIntProperty(
+                      BatteryManager.BATTERY_PROPERTY_CAPACITY);
+
+                  StatFs fs = new StatFs(
+                      Environment.getDataDirectory().getPath());
+                  long storageFree = fs.getAvailableBytes() /
+                      (1024 * 1024 * 1024);
+
+                  return "MEMÓRIA RAM\\n" +
+                      "Total: " + total + " MB\\n" +
+                      "Disponível: " + free + " MB\\n\\n" +
+                      "BATERIA\\n" +
+                      "Carga: " + level + "%\\n\\n" +
+                      "ARMAZENAMENTO\\n" +
+                      "Espaço livre: " + storageFree + " GB";
+              }
+
+              void refresh() {
+                  layout.removeViews(2, layout.getChildCount() - 2);
+                  layout.addView(text(diagnostics(), 18));
+                  button("ATUALIZAR DIAGNÓSTICO", this::refresh);
+                  button("ABRIR CONFIGURAÇÕES", () ->
+                      startActivity(new android.content.Intent(
+                          android.provider.Settings.ACTION_SETTINGS)));
+              }
+
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getWindow().setStatusBarColor(Color.rgb(3, 12, 28));
+                  getWindow().setNavigationBarColor(Color.BLACK);
+
+                  ScrollView scroll = new ScrollView(this);
+                  layout = new LinearLayout(this);
+                  layout.setOrientation(LinearLayout.VERTICAL);
+                  layout.setPadding(20, 28, 20, 28);
+                  layout.setBackgroundColor(Color.rgb(3, 12, 28));
+
+                  scroll.addView(layout);
+                  setContentView(scroll);
+
+                  layout.addView(text("J.A.R.V.I.S.", 34));
+                  layout.addView(text("OPTIMIZER SYSTEM", 16));
+                  layout.addView(text(
+                      "Sistema de diagnóstico e preparação para jogos",
+                      15));
+                  refresh();
+              }
+          }
+          EOF
+
+      - name: Compilar APK
+        run: gradle assembleDebug
+
+      - name: Disponibilizar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-Optimizer-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
